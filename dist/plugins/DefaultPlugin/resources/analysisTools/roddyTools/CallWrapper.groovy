@@ -1,3 +1,5 @@
+package roddyTools
+
 @groovy.transform.CompileStatic
 public class CallWrapper {
 
@@ -8,6 +10,8 @@ public class CallWrapper {
     public static int main(String[] args) {
         new CallWrapper().run();
     }
+
+     Map<String, String> fakeEnvVariablesForTests
 
     /** Some variables, taken from env and config **/
     Map<String, String> cvalues
@@ -46,13 +50,13 @@ public class CallWrapper {
 
     // Load the config file
     Map<String, String> loadConfigurationValues() {
-        return new File(cvalues["CONFIG_FILE"]).readLines().collectEntries { String line -> def split = line.split("[=]"); [split[0], split.size() > 1 ? split[1..-1].join("=") : ""] }
+        return new File(cvalues["CONFIG_FILE"]).readLines().collectEntries { String line -> def split = line.trim().split("[=]"); [split[0], split.size() > 1 ? split[1..-1].join("=") : ""] }
     }
 
     // Load and correct all environment variables
     // Also load from parameter file, if applicable
     Map<String, String> getEnvironmentVariables() {
-        Map<String, String> cvalues = System.getenv()
+        Map<String, String> cvalues = fakeEnvVariablesForTests + System.getenv()
         RODDY_PARENT_JOBS = cvalues["RODDY_PARENT_JOBS"] ?: ""
         String parameterFile = cvalues["PARAMETER_FILE"] ?: ""
         if (parameterFile)
@@ -65,8 +69,7 @@ public class CallWrapper {
         RODDY_JOBID = cvalues["RODDY_JOBID"] ?: ['/bin/bash', '-c', 'echo \$\$'].execute().text.replace("\n", "")
 
         String defaultScratchDir = cvalues["defaultScratchDir"] ?: "/data/roddyScratch"
-        if (!cvalues["RODDY_SCRATCH"])
-            RODDY_SCRATCH = "${defaultScratchDir}/${RODDY_JOBID}"
+        RODDY_SCRATCH = cvalues["RODDY_SCRATCH"] ?: "${defaultScratchDir}/${RODDY_JOBID}"
         File f = new File(RODDY_SCRATCH);
     }
 
@@ -100,7 +103,7 @@ public class CallWrapper {
     // Define some methods first, they are mostly in their call order.
     int exec(String command, boolean full = true) {
         //TODO What an windows systems?
-        def process = null;
+        Process process = null;
         if (full)
             process = ["bash", "-c", command].execute();
         else

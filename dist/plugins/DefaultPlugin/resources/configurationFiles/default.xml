@@ -36,7 +36,8 @@ up and is included in the configuration. The configuration settings directly ove
         <tool name='compressionDetection' value='determineFileCompressor.sh' basepath='roddyTools'/>
         <tool name='createLockFiles' value='createLockFiles.sh' basepath='roddyTools'/>
         <tool name='streamBuffer' value='streamBuffer.sh' basepath='roddyTools'/>
-        <tool name='wrapinScript' value='wrapInScript.sh' basepath='roddyTools'/>
+        <tool name='wrapinScript' value='callWrapperCaller.sh' basepath='roddyTools'/>
+        <tool name='callWrapper' value='CallWrapper.groovy' basepath='roddyTools'/>
         <tool name='nativeWorkflowScriptWrapper' value='nativeWorkflowScriptWrapper.sh' basepath='roddyTools'/>
     </processingTools>
 </configuration>
