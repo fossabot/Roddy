@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.config
 
 import de.dkfz.roddy.knowledge.brawlworkflows.BrawlWorkflow
@@ -23,7 +29,6 @@ import org.apache.commons.io.filefilter.WildcardFileFilter
 
 import java.lang.reflect.*
 import java.util.logging.*
-import java.util.regex.Pattern
 
 import static de.dkfz.roddy.StringConstants.*
 
@@ -67,7 +72,7 @@ public class ConfigurationFactory {
 
     public ConfigurationFactory(List<File> configurationDirectories = null) {
         if (configurationDirectories == null)
-            configurationDirectories = Roddy.getConfigurationDirectories();
+            configurationDirectories = Roddy.getConfigurationDirectories()
 
         this.configurationDirectories.addAll(configurationDirectories);
 
@@ -79,9 +84,9 @@ public class ConfigurationFactory {
         configurationDirectories.parallelStream().each {
             File baseDir ->
                 logger.log(Level.CONFIG, "Searching for configuration files in: " + baseDir.toString());
-                if (!baseDir.canRead()) {
-                    logger.log(Level.SEVERE, "Cannot read from configuration directory ${baseDir.absolutePath}, does the folder exist und do you have access rights to it?")
-                    return;
+                if (!baseDir.canRead() || !baseDir.canExecute()) {
+                    logger.log(Level.SEVERE, "Cannot read from configuration directory ${baseDir.absolutePath}, does the folder exist und do you have access (read/execute) rights to it?")
+                    throw new RuntimeException("Cannot access (read and execute) configuration directory '${baseDir}'")
                 }
                 File[] files = baseDir.listFiles((FileFilter) new WildcardFileFilter("*.xml"));
                 if (files == null) {
@@ -540,9 +545,10 @@ public class ConfigurationFactory {
         if (splitResult.size() == 1) {
             //any tool and param
             toolName= null
-            parameterName = splitResult
+            parameterName = splitResult.first()
         } else if (splitResult.size() == 2){
-            (toolName, parameterName) = splitResult
+            toolName = splitResult[0]
+            parameterName = splitResult[1]
 
             if (toolName.equals("[ANY]") || toolName.equals("")) {
                 //only param OR [ANY] tool and param
@@ -609,45 +615,56 @@ public class ConfigurationFactory {
 
 
     @groovy.transform.CompileStatic(TypeCheckingMode.SKIP)
-    private void readProcessingTools(NodeChild configurationNode, Configuration config) {
+    public void readProcessingTools(NodeChild configurationNode, Configuration config) {
         Map<String, ToolEntry> toolEntries = config.getTools().getMap();
-
         for (NodeChild tool in configurationNode.processingTools.tool) {
             String toolID = tool.@name.text()
             logger.postRareInfo("Processing tool ${toolID}");
-            try {
-                String path = tool.@value.text()
-                String basePathId = tool.@basepath.text()
-                boolean overrideresourcesets = extractAttributeText(tool, "overrideresourcesets", "false").toBoolean();
-                ToolEntry currentEntry = new ToolEntry(toolID, basePathId, path);
-                if (overrideresourcesets)
-                    currentEntry.setOverridesResourceSets();
-                int noOfChildren = tool.children().size();
-                if (noOfChildren > 0) {
-                    List<ToolEntry.ToolParameter> inputParameters = new LinkedList<>();
-                    List<ToolEntry.ToolParameter> outputParameters = new LinkedList<>();
-                    List<ToolEntry.ResourceSet> resourceSets = new LinkedList<>();
-                    for (NodeChild child in tool.children()) {
-                        String cName = child.name();
+            toolEntries[toolID] = readProcessingTool(tool, config)
+        }
+    }
 
-                        if (cName == "resourcesets") {
-                            for (NodeChild rset in child.rset) {
-                                ToolEntry.ResourceSet tempSet = parseToolResourceSet(rset, config)
-                                if (tempSet)
-                                    resourceSets << tempSet;
-                            }
-                        } else if (cName == "input") {
-                            inputParameters << parseToolParameter(toolID, child);
-                        } else if (cName == "output") {
-                            outputParameters << parseToolParameter(toolID, child);
+    @groovy.transform.CompileStatic(TypeCheckingMode.SKIP)
+    public ToolEntry readProcessingTool(NodeChild tool, Configuration config){
+        try {
+            String toolID = tool.@name.text()
+            String path = tool.@value.text()
+            String basePathId = tool.@basepath.text()
+            boolean overrideresourcesets = extractAttributeText(tool, "overrideresourcesets", "false").toBoolean();
+            ToolEntry currentEntry = new ToolEntry(toolID, basePathId, path);
+            if (overrideresourcesets)
+                currentEntry.setOverridesResourceSets();
+            int noOfChildren = tool.children().size();
+            if (noOfChildren > 0) {
+                List<ToolEntry.ToolParameter> inputParameters = new LinkedList<>();
+                List<ToolEntry.ToolParameter> outputParameters = new LinkedList<>();
+                List<ToolEntry.ResourceSet> resourceSets = new LinkedList<>();
+                for (NodeChild child in tool.children()) {
+                    String cName = child.name();
+
+                    if (cName == "resourcesets") {
+                        for (NodeChild rset in child.rset) {
+                            ToolEntry.ResourceSet tempSet = parseToolResourceSet(rset, config)
+                            if (tempSet)
+                                resourceSets << tempSet;
                         }
+                    } else if (cName == "input") {
+                        inputParameters << parseToolParameter(toolID, child);
+                    } else if (cName == "output") {
+                        outputParameters << parseToolParameter(toolID, child);
+                    } else if (cName == "script") {
+                        if (child.@value.text() != ""){
+                            currentEntry.setInlineScript(child.text().trim().replaceAll( '<!\\[CDATA\\[', "" ).replaceAll( ']]>', "" ))
+                            currentEntry.setInlineScriptName(child.@value.text())
+                        }
+
                     }
-                    currentEntry.setGenericOptions(inputParameters, outputParameters, resourceSets);
                 }
-                toolEntries[toolID] = currentEntry;
-            } catch (Exception ex) {
-                println(ex);
+                currentEntry.setGenericOptions(inputParameters, outputParameters, resourceSets);
             }
+            return currentEntry;
+        } catch (Exception ex) {
+            println(ex);
         }
     }
 
@@ -848,8 +865,8 @@ public class ConfigurationFactory {
 
         String pName = child.@scriptparameter.text();
         String fnpSelTag = extractAttributeText(child, "fnpatternselectiontag", FilenamePattern.DEFAULT_SELECTION_TAG);
-        boolean check = Boolean.parseBoolean(extractAttributeText(child, "check", "true"));
         String parentFileVariable = extractAttributeText(child, "variable", null); //This is only the case for child files.
+        ToolEntry.ToolFileParameterCheckCondition check = new ToolEntry.ToolFileParameterCheckCondition(extractAttributeText(child, "check", "true"));
 
         List<ToolEntry.ToolConstraint> constraints = new LinkedList<ToolEntry.ToolConstraint>();
         for (constraint in child.constraint) {

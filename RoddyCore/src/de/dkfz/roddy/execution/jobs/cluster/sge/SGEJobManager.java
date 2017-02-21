@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.execution.jobs.cluster.sge;
 
 import de.dkfz.roddy.StringConstants;
@@ -21,6 +27,11 @@ import java.util.Map;
  * Created by michael on 20.05.14.
  */
 public class SGEJobManager extends PBSJobManager {
+
+    public SGEJobManager() {
+        super(true);
+
+    }
 
     public SGEJobManager(boolean createDaemon) {
         super(createDaemon);
@@ -113,7 +124,7 @@ public class SGEJobManager extends PBSJobManager {
 
     protected List<String> getTestQstat() {
         return Arrays.asList(
-                "job - ID prior name user state submit / start at queue slots ja -task - ID",
+                "job - ID prior name user jobState submit / start at queue slots ja -task - ID",
                 "---------------------------------------------------------------------------------------------------------------- -",
                 "   1187 0.75000 r140710_09 seqware r 07 / 10 / 2014 09:51:55 main.q @worker3 1",
                 "   1188 0.41406 r140710_09 seqware r 07 / 10 / 2014 09:51:40 main.q @worker1 1",

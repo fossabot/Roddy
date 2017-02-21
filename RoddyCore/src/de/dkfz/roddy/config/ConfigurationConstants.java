@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.config;
 
 /**
@@ -14,6 +20,7 @@ public class ConfigurationConstants {
     public static final String DEBUG_OPTIONS_USE_PIPEFAIL = "debugOptionsUsePipefail";
     public static final String DEBUG_OPTIONS_USE_VERBOSE_OUTPUT = "debugOptionsUseVerboseOutput";
     public static final String DEBUG_OPTIONS_USE_EXECUTE_OUTPUT = "debugOptionsUseExecuteOutput";
+    public static final String DEBUG_OPTIONS_USE_EXTENDED_EXECUTE_OUTPUT = "debugOptionsUseExtendedExecuteOutput";
     public static final String DEBUG_OPTIONS_USE_UNDEFINED_VARIABLE_BREAK = "debugOptionsUseUndefinedVariableBreak";
     public static final String DEBUG_OPTIONS_USE_EXIT_ON_ERROR = "debugOptionsUseExitOnError";
     public static final String DEBUG_OPTIONS_PARSE_SCRIPTS = "debugOptionsParseScripts";
@@ -44,5 +51,7 @@ public class ConfigurationConstants {
     public static final String CFG_PREVENT_JOB_EXECUTION = "preventJobExecution";
     public static final String CFG_USE_CENTRAL_ANALYSIS_ARCHIVE = "useCentralAnalysisArchive";
     public static final String CFG_OUTPUT_UMASK = "outputUMask";
+
+    public static final String CFG_USED_RESOURCES_SIZE = "usedResourcesSize";
 
 }

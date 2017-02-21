@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.core;
 
 import de.dkfz.roddy.config.Configuration;
@@ -121,7 +127,7 @@ public class Project implements Serializable {
         return runtimeService;
     }
 
-//    public List<DataSet> getListOfDataSets() {
+//    public List<DataSet> getListOfPossibleDataSets() {
 //        return listOfDataSets;
 //    }
 

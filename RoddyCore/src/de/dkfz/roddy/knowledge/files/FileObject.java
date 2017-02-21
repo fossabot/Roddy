@@ -1,10 +1,15 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.knowledge.files;
 
 import de.dkfz.roddy.core.ExecutionContext;
 import de.dkfz.roddy.core.DataSet;
 import de.dkfz.roddy.core.Project;
 import de.dkfz.roddy.execution.jobs.JobResult;
-import examples.Exec;
 
 import java.io.Serializable;
 

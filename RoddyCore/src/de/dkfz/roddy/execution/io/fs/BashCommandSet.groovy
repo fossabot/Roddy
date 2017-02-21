@@ -1,7 +1,14 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.execution.io.fs
 
 import de.dkfz.roddy.config.converters.BashConverter
 import de.dkfz.roddy.config.converters.ConfigurationConverter
+import de.dkfz.roddy.execution.io.ExecutionService
 import de.dkfz.roddy.tools.RoddyIOHelperMethods
 
 /**
@@ -36,19 +43,19 @@ public class BashCommandSet extends ShellCommandSet {
     @Override
     public String getReadabilityTestCommand(File f) {
         String path = f.getAbsolutePath();
-        return "[[ -e ${path} && -r ${path} ]]" + TRUE_OR_FALSE;
+        return "[[ -e ${path} && -r ${path} ]] " + TRUE_OR_FALSE;
     }
 
     @Override
     String getWriteabilityTestCommand(File f) {
         String path = f.getAbsolutePath();
-        return "[[ -e ${path} && -w ${path} ]]" + TRUE_OR_FALSE;
+        return "[[ -e ${path} && -w ${path} ]] " + TRUE_OR_FALSE;
     }
 
     @Override
     public String getExecutabilityTestCommand(File f) {
         String path = f.getAbsolutePath();
-        return "[[ -e ${path} && -x ${path} ]]" + TRUE_OR_FALSE;
+        return "[[ -e ${path} && -x ${path} ]] " + TRUE_OR_FALSE;
     }
 
     @Override
@@ -72,6 +79,19 @@ public class BashCommandSet extends ShellCommandSet {
     @Override
     String getOwnerOfPathCommand(File f) {
         return "stat -c %U ${f.absolutePath}";
+    }
+
+    @Override
+    String getCheckForInteractiveConsoleCommand() {
+        String separator = "\n"
+        StringBuilder builder = new StringBuilder();
+        builder << 'if [ -z "${PS1-}" ]; then' << separator << "\t echo non interactive process!" << separator << "else" << separator << "\t echo interactive process"
+        return builder.toString();
+    }
+
+    @Override
+    String getSetPathCommand() {
+        return '[[ ! ${SET_PATH-} == "" ]] && export PATH=${SET_PATH}'
     }
 
     @Override
@@ -220,12 +240,12 @@ public class BashCommandSet extends ShellCommandSet {
 
     @Override
     String getCopyFileCommand(File _in, File _out) {
-        return "cp ${_in.getAbsolutePath()} ${_out.getAbsolutePath()}";
+        return "cp -p ${_in.getAbsolutePath()} ${_out.getAbsolutePath()}";
     }
 
     @Override
     String getCopyDirectoryCommand(File _in, File _out) {
-        return "cp -r ${_in.getAbsolutePath()} ${_out.getAbsolutePath()}";
+        return "cp -pr ${_in.getAbsolutePath()} ${_out.getAbsolutePath()}";
     }
 
     @Override
@@ -259,5 +279,26 @@ public class BashCommandSet extends ShellCommandSet {
     @Override
     String getExecuteScriptCommand(File file) {
         return "/bin/bash ${file.absolutePath}";
+    }
+
+    @Override
+    String singleQuote(String text) {
+        return "'${text}'"
+    }
+
+    @Override
+    String doubleQuote(String text) {
+        return "\"${text}\""
+    }
+
+    @Override
+    List<String> getShellExecuteCommand(String... commands) {
+        return ["bash", "-c"] + (commands as List<String>);
+    }
+
+    @Override
+    boolean validate() {
+        def file = new File("/bin/bash")
+        return file.exists() && file.canExecute();
     }
 }

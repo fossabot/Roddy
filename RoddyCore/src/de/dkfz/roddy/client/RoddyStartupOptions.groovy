@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.client;
 
 /**
@@ -29,6 +35,10 @@ public enum RoddyStartupOptions {
     test,
     useiodir(true),
     usemetadatatable(true),
+    /**
+     * Override project speicifc usedresourcessize
+     */
+    usedresourcessize(true),
     disabletrackonlyuserjobs,
     trackonlystartedjobs,
     resubmitjobonerror,
@@ -48,7 +58,9 @@ public enum RoddyStartupOptions {
     executionServiceAuth(true), 
     executionServiceHost(true), 
     executionServiceUser(true),
-    
+
+    userepository(true),
+
     detailed, disallowexit;
 
     public final boolean acceptsParameters;

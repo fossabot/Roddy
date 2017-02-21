@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.plugins
 
 import de.dkfz.roddy.AvailableFeatureToggles
@@ -5,6 +11,8 @@ import de.dkfz.roddy.Roddy
 import de.dkfz.roddy.client.RoddyStartupModes
 import de.dkfz.roddy.client.cliclient.CommandLineCall
 import de.dkfz.roddy.execution.io.ExecutionHelper
+import de.dkfz.roddy.execution.io.LocalExecutionService
+import de.dkfz.roddy.execution.io.fs.FileSystemAccessProvider
 import de.dkfz.roddy.knowledge.files.BaseFile
 import de.dkfz.roddy.knowledge.files.FileObject
 import de.dkfz.roddy.tools.*
@@ -47,7 +55,7 @@ public class LibrariesFactory extends Initializable {
 
     private Map<PluginInfo, File> loadedJarsByPlugin = [:]
 
-    private Map<String, Map<String, PluginInfo>> mapOfPlugins = [:];
+    private PluginInfoMap mapOfPlugins = [:];
 
     private boolean librariesAreLoaded = false;
 
@@ -185,9 +193,7 @@ public class LibrariesFactory extends Initializable {
      * @param usedPlugins
      */
     public boolean resolveAndLoadPlugins(String[] usedPlugins) {
-        Map<String, Map<String, PluginInfo>> mapOfPlugins = loadMapOfAvailablePluginsForInstance();
-
-        def queue = buildupPluginQueue(mapOfPlugins, usedPlugins)
+        def queue = buildupPluginQueue(loadMapOfAvailablePluginsForInstance(), usedPlugins)
         librariesAreLoaded = loadLibraries(queue.values() as List);
         return librariesAreLoaded;
     }
@@ -200,9 +206,11 @@ public class LibrariesFactory extends Initializable {
         return loadedPlugins;
     }
 
-    private Map<String, Map<String, PluginInfo>> loadMapOfAvailablePluginsForInstance() {
-        if (!mapOfPlugins)
-            mapOfPlugins = loadMapOfAvailablePlugins(Roddy.getPluginDirectories());
+    public PluginInfoMap loadMapOfAvailablePluginsForInstance() {
+        if (!mapOfPlugins) {
+            def directories = Roddy.getPluginDirectories()
+            mapOfPlugins = loadMapOfAvailablePlugins(directories)
+        };
     }
 
     /**
@@ -219,45 +227,61 @@ public class LibrariesFactory extends Initializable {
      *
      * @return
      */
-    static Map<String, Map<String, PluginInfo>> loadMapOfAvailablePlugins(List<File> pluginDirectories) {
+    static PluginInfoMap loadMapOfAvailablePlugins(List<File> pluginDirectories) {
 
         //Search all plugin folders and also try to join those if possible.
         List<Tuple2<File, String[]>> collectedPluginDirectories = [];
-        def blacklist = [".idea", "out", "Template", ".svn"]
         boolean warningUnzippedDirectoriesMissing = false;
 
         for (File pBaseDirectory : pluginDirectories) {
-	    logger.postSometimesInfo("Parsing plugins folder: ${pBaseDirectory}");
+            logger.postSometimesInfo("Parsing plugins folder: ${pBaseDirectory}");
+            if (!pBaseDirectory.exists()) {
+                logger.warning("The plugins directory $pBaseDirectory does not exist.")
+                continue;
+            }
+            if (!pBaseDirectory.canRead()) {
+                logger.warning("The plugins directory $pBaseDirectory is not readable.")
+            }
+
             File[] directoryList = pBaseDirectory.listFiles().sort() as File[];
             for (File pEntry in directoryList) {
-	        logger.postRareInfo("  Parsing plugin folder: ${pEntry}");
-                String dirName = pEntry.getName();
-                boolean isZip = dirName.endsWith(".zip");
-                boolean unzippedDirectoryExists = false;
-                if (isZip) {
-                    dirName = dirName[0..-5]; // Remove .zip from the end.
-                    unzippedDirectoryExists = new File(dirName).exists();
-                    if (isZip && !unzippedDirectoryExists) warningUnzippedDirectoriesMissing = true;
-                    //set warn unzipped dir missing.
-                }
 
-                String[] splitName = dirName.split(StringConstants.SPLIT_UNDERSCORE); //First split for .zip then for the version
-                String pluginName = splitName[0];
-                if ((!pEntry.isDirectory() && !isZip) || isZip || !pluginName || blacklist.contains(pluginName))
+                if (!isValidPluginFolder(pEntry))
                     continue;
+
+                String[] splitName = pEntry.name.split(StringConstants.SPLIT_UNDERSCORE); //First split for .zip then for the version
                 collectedPluginDirectories << new Tuple2<File, String[]>(pEntry, splitName);
             }
-        }
-
-        if (warningUnzippedDirectoriesMissing) {
-            logger.warning("There are plugins in your directories which are not unzipped. If some plugins are not found, please consider to check your zipped plugins.")
         }
 
         return loadPluginsFromDirectories(collectedPluginDirectories)
     }
 
+    static boolean isValidPluginFolder(File directory) {
+        logger.postRareInfo("  Parsing plugin folder: ${directory}");
+
+        if (!directory.isDirectory())
+            return false;
+        if (directory.isHidden())
+            return false;
+        if (!directory.canRead())
+            return false;
+
+        String dirName = directory.getName();
+        if (!isPluginDirectoryNameValid(dirName))
+            return false;
+
+        def f = FileSystemAccessProvider.getInstance();
+        if (!f.checkFile(new File(directory, "buildinfo.txt")) ||
+                !f.checkFile(new File(directory, "buildversion.txt")) ||
+                !f.checkDirectory(new File(directory, "resources/analysisTools")) ||
+                !f.checkDirectory(new File(directory, "resources/configurationFiles"))
+        ) return false
+        return true
+    }
+
     @groovy.transform.CompileStatic(TypeCheckingMode.SKIP)
-    private static List<Tuple2<File, String[]>> checkValidPluginNames (List<Tuple2<File, String[]>> collectedPluginDirectories) {
+    private static List<Tuple2<File, String[]>> checkValidPluginNames(List<Tuple2<File, String[]>> collectedPluginDirectories) {
         List<Tuple2<File, String[]>> collectedTemporary = [];
         collectedPluginDirectories.each { tuple ->
             String rev = (tuple.x.name.split("[-]") as List)[1]
@@ -279,7 +303,7 @@ public class LibrariesFactory extends Initializable {
     private static List<Tuple2<File, String[]>> sortPluginDirectories(List<Tuple2<File, String[]>> collectedPluginDirectories) {
         collectedPluginDirectories = collectedPluginDirectories.sort {
             Tuple2<File, String[]> left, Tuple2<File, String[]> right ->
-				logger.postRareInfo("Call to plugin directory sort for ${left.x} vs ${right.x}");
+                logger.postRareInfo("Call to plugin directory sort for ${left.x} vs ${right.x}");
                 List<String> splitLeft = left.x.name.split("[_:.-]") as List;
                 List<String> splitRight = right.x.name.split("[_:.-]") as List;
                 Tuple5<String, Integer, Integer, Integer, Integer> tLeft = new Tuple5<>(
@@ -321,12 +345,12 @@ public class LibrariesFactory extends Initializable {
      * @return
      */
     @groovy.transform.CompileStatic(TypeCheckingMode.SKIP)
-    private static Map<String, Map<String, PluginInfo>> loadPluginsFromDirectories(List<Tuple2<File, String[]>> collectedPluginDirectories) {
+    private static PluginInfoMap loadPluginsFromDirectories(List<Tuple2<File, String[]>> collectedPluginDirectories) {
         collectedPluginDirectories = sortPluginDirectories(checkValidPluginNames(collectedPluginDirectories))
 
         Map<String, Map<String, PluginInfo>> _mapOfPlugins = [:];
         for (Tuple2<File, String[]> _entry : collectedPluginDirectories) {
-			logger.postRareInfo("Processing plugin entry: ${_entry.x}")
+            logger.postRareInfo("Processing plugin entry: ${_entry.x}")
             File pEntry = _entry.x;
             String[] splitName = _entry.y;//pEntry.getName().split(StringConstants.SPLIT_UNDERSCORE); //First split for .zip then for the version
 
@@ -405,10 +429,10 @@ public class LibrariesFactory extends Initializable {
             if (isBetaPlugin)
                 newPluginInfo.isBetaPlugin = true;
         }
-        return _mapOfPlugins
+        return new PluginInfoMap(_mapOfPlugins)
     }
 
-    public static Map<String, PluginInfo> buildupPluginQueue(Map<String, Map<String, PluginInfo>> mapOfPlugins, String[] usedPlugins) {
+    public static Map<String, PluginInfo> buildupPluginQueue(PluginInfoMap mapOfPlugins, String[] usedPlugins) {
         List<String> usedPluginsCorrected = [];
         List<Tuple2<String, String>> pluginsToCheck = usedPlugins.collect { String requestedPlugin ->
             List<String> pSplit = requestedPlugin.split("[:-]") as List;
@@ -430,14 +454,14 @@ public class LibrariesFactory extends Initializable {
             //There are now some  as String conversions which are just there for the Idea code view... They'll be shown as faulty otherwise.
             if (version != PLUGIN_VERSION_CURRENT && !(version as String).contains("-")) version += "-0";
 
-            if (!mapOfPlugins[id as String] || !mapOfPlugins[id as String][version as String]) {
+            if (!mapOfPlugins.checkExistence(id as String, version as String)) {
                 logger.severe("The plugin ${id}:${version} could not be found, are the plugin paths properly set?");
                 return null;
             }
             pluginsToCheck.remove(0);
 
             // Set pInfo to a valid instance.
-            PluginInfo pInfo = mapOfPlugins[id as String][version as String];
+            PluginInfo pInfo = mapOfPlugins.getPluginInfo(id as String, version as String);
 
             // Now, if the plugin is not in usedPlugins (and therefore not fixed), we search the newest compatible
             // version of it which may either be a revision (x:x.y-[0..n] or a higher compatible version.
@@ -451,7 +475,7 @@ public class LibrariesFactory extends Initializable {
             }
 
             if (pInfo == null)
-                pInfo = mapOfPlugins[id as String][PLUGIN_VERSION_CURRENT]
+                pInfo = mapOfPlugins.getPluginInfo(id as String, PLUGIN_VERSION_CURRENT);
             if (pInfo == null)
                 continue;
             if (pluginsToActivate[id as String] != null) {
@@ -472,33 +496,33 @@ public class LibrariesFactory extends Initializable {
             //Load default plugins, if necessary.
             if (!pluginsToCheck) {
                 if (!pluginsToActivate.containsKey(PLUGIN_DEFAULT)) {
-                    pluginsToActivate[PLUGIN_DEFAULT] = mapOfPlugins[PLUGIN_DEFAULT][PLUGIN_VERSION_CURRENT];
+                    pluginsToActivate[PLUGIN_DEFAULT] = mapOfPlugins.getPluginInfo(PLUGIN_DEFAULT, PLUGIN_VERSION_CURRENT);
                 }
                 if (!pluginsToActivate.containsKey(PLUGIN_BASEPLUGIN)) {
-                    pluginsToActivate[PLUGIN_BASEPLUGIN] = mapOfPlugins[PLUGIN_BASEPLUGIN][PLUGIN_VERSION_CURRENT];
+                    pluginsToActivate[PLUGIN_BASEPLUGIN] = mapOfPlugins.getPluginInfo(PLUGIN_BASEPLUGIN, PLUGIN_VERSION_CURRENT);
                 }
             }
         }
         return pluginsToActivate;
     }
 
-    /**
-     * Get a list of all available plugins in their most recent version...
-     * @return
-     */
-    public List<PluginInfo> getAvailablePluginVersion() {
-        List<PluginInfo> mostCurrentPlugins = [];
-        Map<String, Map<String, PluginInfo>> availablePlugins = loadMapOfAvailablePluginsForInstance();
-        availablePlugins.each {
-            String pluginID, Map<String, PluginInfo> versions ->
-                if (versions.keySet().contains(PLUGIN_VERSION_CURRENT))
-                    mostCurrentPlugins << versions[PLUGIN_VERSION_CURRENT];
-                else
-                    mostCurrentPlugins << versions[versions.keySet().last()]
-        }
-
-        return mostCurrentPlugins;
-    }
+//    /**
+//     * Get a list of all available plugins in their most recent version...
+//     * @return
+//     */
+//    public List<PluginInfo> getAvailablePluginVersion() {
+//        List<PluginInfo> mostCurrentPlugins = [];
+//        PluginInfoMap availablePlugins = loadMapOfAvailablePluginsForInstance();
+//        availablePlugins.each {
+//            String pluginID, Map<String, PluginInfo> versions ->
+//                if (versions.keySet().contains(PLUGIN_VERSION_CURRENT))
+//                    mostCurrentPlugins << versions[PLUGIN_VERSION_CURRENT];
+//                else
+//                    mostCurrentPlugins << versions[versions.keySet().last()]
+//        }
+//
+//        return mostCurrentPlugins;
+//    }
 
     public static boolean addFile(File f) throws IOException {
         return addURL(f.toURI().toURL());

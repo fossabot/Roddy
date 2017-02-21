@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.execution.jobs.cluster.pbs;
 
 import de.dkfz.roddy.Constants;
@@ -57,7 +63,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
             try {
                 updateDaemonThread.join();
             } catch (InterruptedException e) {
-                e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                e.printStackTrace();
             }
             updateDaemonThread = null;
         }
@@ -70,11 +76,11 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
                 while (!closeThread) {
                     long currentTime = System.nanoTime();
                     long diff = currentTime - nanoTime;
-                    while (diff > 0) {
-                        nanoTime += interval;
-                        diff -= interval;
+//                    while (diff > 0) {
+//                        nanoTime += interval;
+//                        diff -= interval;
                         intervalReached = true;
-                    }
+//                    }
                     if (intervalReached) {
                         try {
                             updateJobStatus();
@@ -84,9 +90,9 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
                         intervalReached = false;
                     }
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(_interval * 1000);
                     } catch (InterruptedException e) {
-                        e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                        e.printStackTrace();
                     }
                 }
             }
@@ -176,7 +182,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
             }
             int unknown = context.getExecutedJobs().size() - statesMap.size();
             if (unknown > 0) {
-                logger.info("There were " + unknown + " jobs with an unknown state.");
+                logger.info("There were " + unknown + " jobs with an unknown jobState.");
 //                for (String s : statesMap.keySet()) {
 //                    logger.info("\t" + s + " => " + statesMap.get(s));
 //                }
@@ -340,7 +346,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
                     toolID = jobName.substring(jobName.lastIndexOf("_") + 1);
                 } catch (Exception e) {
                     //TODO Jobnames not read out properly in some cases
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    e.printStackTrace();
                 }
             } else if (var.equals("v")) {
                 String[] variables = parms.split(SPLIT_COMMA);
@@ -500,7 +506,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
 
                     allStatesTemp.put(id, js);
                     if (logger.isVerbosityHigh())
-                        System.out.println("   Extracted state: " + js.toString());
+                        System.out.println("   Extracted jobState: " + js.toString());
                 }
             }
 
@@ -513,7 +519,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
                     Job job = jobStatusListeners.get(id);
 
                     if (js == JobState.UNKNOWN_SUBMITTED) {
-                        // If the state is unknown and the job is not running anymore it is counted as failed.
+                        // If the jobState is unknown and the job is not running anymore it is counted as failed.
                         job.setJobState(JobState.FAILED);
                         removejobs.add(job);
                         continue;
@@ -548,7 +554,7 @@ public class PBSJobManager extends ClusterJobManager<PBSCommand> {
                             }
                             js = jobsCurrentState;
                         } catch (Exception ex) {
-                            //Could not read out job state from file
+                            //Could not read out job jobState from file
                         }
                     }
                     job.setJobState(js);

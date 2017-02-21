@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.config;
 
 import de.dkfz.roddy.Roddy;
@@ -5,12 +11,15 @@ import de.dkfz.roddy.core.ExecutionContext;
 import de.dkfz.roddy.knowledge.files.BaseFile;
 import de.dkfz.roddy.knowledge.files.FileStageSettings;
 
+
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
 import static de.dkfz.roddy.StringConstants.*;
+import de.dkfz.roddy.config.FilenamePatternHelper.Command;
+import de.dkfz.roddy.config.FilenamePatternHelper.CommandAttribute;
 
 /**
  * Filename patterns are stored in a configuration file. They are project specific and should be fully configurable.
@@ -90,7 +99,7 @@ public abstract class FilenamePattern implements RecursiveOverridableMapContaine
         }
 
         while (temp.contains(PLACEHOLDER_CVALUE)) {
-            Command command = extractCommand(PLACEHOLDER_CVALUE, temp);
+            Command command = FilenamePatternHelper.extractCommand(context, PLACEHOLDER_CVALUE, temp);
             CommandAttribute name = command.attributes.get("name");
             CommandAttribute def = command.attributes.get("default");
             if (name != null) {
@@ -169,7 +178,7 @@ public abstract class FilenamePattern implements RecursiveOverridableMapContaine
                 temp = temp.replace("${sourcefile}", sourcepath.getAbsolutePath());
                 temp = temp.replace("${sourcefileAtomic}", sourcepath.getName());
                 if (temp.contains(PLACEHOLDER_SOURCEFILE_PROPERTY)) { //Replace the string with a property value
-                    Command command = extractCommand(PLACEHOLDER_SOURCEFILE_PROPERTY, temp);
+                    Command command = FilenamePatternHelper.extractCommand(baseFile.getExecutionContext(), PLACEHOLDER_SOURCEFILE_PROPERTY, temp);
                     String pName = command.attributes.keySet().toArray()[0].toString();
 
                     String accessorName = "get" + pName.substring(0, 1).toUpperCase() + pName.substring(1);
@@ -178,7 +187,7 @@ public abstract class FilenamePattern implements RecursiveOverridableMapContaine
                     temp = temp.replace(command.name, value);
                 }
                 if (temp.contains(PLACEHOLDER_SOURCEFILE_ATOMIC_PREFIX)) {
-                    Command command = extractCommand(PLACEHOLDER_SOURCEFILE_ATOMIC_PREFIX, temp);
+                    Command command = FilenamePatternHelper.extractCommand(baseFile.getExecutionContext(), PLACEHOLDER_SOURCEFILE_ATOMIC_PREFIX, temp);
                     CommandAttribute att = command.attributes.get("delimiter");
                     if (att != null) {
                         String sourcename = sourcepath.getName();
@@ -198,50 +207,9 @@ public abstract class FilenamePattern implements RecursiveOverridableMapContaine
             temp = fillVariablesFromSourceFileValues(baseFile, temp);
         } catch (Exception e) {
             logger.severe("Could not apply filename pattern " + pattern + " for file " + baseFiles[0]);
-            e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+            e.printStackTrace();
         }
         return temp;
     }
 
-    public static class Command {
-        public final String name;
-        public final Map<String, CommandAttribute> attributes = new HashMap<String, CommandAttribute>();
-
-        private Command(String name, Map<String, CommandAttribute> attributes) {
-            this.name = name;
-            if (attributes != null)
-                this.attributes.putAll(attributes);
-        }
-    }
-
-    public static class CommandAttribute {
-        public final String name;
-        public final String value;
-
-        private CommandAttribute(String name, String value) {
-            this.name = name;
-            this.value = value;
-        }
-    }
-
-    public static Command extractCommand(String commandID, String temp) {
-        int startIndex = temp.indexOf(commandID);
-        int endIndex = temp.indexOf(BRACE_RIGHT, startIndex);
-        String command = temp.substring(startIndex, endIndex + 1);
-
-        Map<String, CommandAttribute> attributes = new HashMap<String, CommandAttribute>();
-
-        String[] split = command.split(SPLIT_COMMA);
-        for (int i = 1; i < split.length; i++) { //Start with the first option.
-            String _split = split[i].replaceAll("[^0-9a-zA-Z=.-_+#]", EMPTY);
-            String[] attributeSplit = _split.split(SPLIT_EQUALS);
-            String name = attributeSplit[0];
-            String value = EMPTY;
-            if (attributeSplit.length == 2)
-                value = attributeSplit[1];
-            attributes.put(name, new CommandAttribute(name, value));
-        }
-
-        return new Command(command, attributes);
-    }
 }

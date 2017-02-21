@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.knowledge.methods
 
 import de.dkfz.roddy.execution.jobs.JobManager
@@ -266,7 +272,7 @@ class GenericMethod {
         if (calledTool.getOutputParameters(configuration).size() == 1) {
             ToolEntry.ToolParameter tparm = calledTool.getOutputParameters(configuration)[0];
             if (tparm instanceof ToolEntry.ToolFileParameter) {
-                outputObject = createOutputFile(tparm) as F
+                outputObject = createOutputFile(tparm as ToolEntry.ToolFileParameter) as F
 
             } else if (tparm instanceof ToolEntry.ToolTupleParameter) {
                 outputObject = createOutputTuple(tparm as ToolEntry.ToolTupleParameter) as F
@@ -420,7 +426,7 @@ class GenericMethod {
             throw (ex);
         }
 
-        if (!fileParameter.checkFile)
+        if (!fileParameter.checkFile.evaluate(context))
             bf.setAsTemporaryFile();
 
         if (allInputFiles.size() > 1)

@@ -1,8 +1,9 @@
 #!/bin/bash
 
 cd `dirname $0`
-
 parm1=${1-}
+
+JAVA_OPTS=${JAVA_OPTS:-"-Xms64m -Xmx500m"}
 
 # Call some scripts before other steps start.
 if [[ "$parm1" == "prepareprojectconfig" ]]; then
@@ -35,7 +36,7 @@ if [[ "$parm1" == "compile" ]]; then
     source ${SCRIPTS_DIR}/compileRoddyBinary.sh
     exit 0
 elif [[ "$parm1" == "pack" ]]; then
-    groovy ${SCRIPTS_DIR}/addChangelistVersionTag.groovy README.md RoddyCore/buildversion.txt
+    $GROOVY_BINARY ${SCRIPTS_DIR}/addChangelistVersionTag.groovy CHANGELIST.md RoddyCore/buildversion.txt
     major=`head RoddyCore/buildversion.txt -n 1`
     minor=`tail RoddyCore/buildversion.txt -n 1`
 
@@ -72,9 +73,9 @@ elif [[ "$parm1" == "packplugin" || "$parm1" == "testpackplugin" ]]; then
     source ${SCRIPTS_DIR}/resolveAppConfig.sh
     pluginID=$2
     pluginDirectories=`grep pluginDirectories ${customconfigfile}`
-    pluginDirectory=`groovy ${SCRIPTS_DIR}/findPluginFolders.groovy ${pluginDirectories} ${RODDY_DIRECTORY} ${pluginID}`
+    pluginDirectory=`$GROOVY_BINARY ${SCRIPTS_DIR}/findPluginFolders.groovy ${pluginDirectories} ${RODDY_DIRECTORY} ${pluginID}`
     for i in `ls ${pluginDirectory}/README*.txt 2> /dev/null`; do
-        groovy ${SCRIPTS_DIR}/addChangelistVersionTag.groovy $i ${pluginDirectory}/buildversion.txt
+        $GROOVY_BINARY ${SCRIPTS_DIR}/addChangelistVersionTag.groovy $i ${pluginDirectory}/buildversion.txt
     done
 
     major=`head ${pluginDirectory}/buildversion.txt -n 1`
@@ -126,5 +127,7 @@ elif [[ "$parm1" == "createworkflow" ]]; then
     exit 0
 fi
 
-java -cp .:$libraries:${RODDY_BINARY} de.dkfz.roddy.Roddy $*
-
+IFS=""
+#[[ $RMIPORT != "" ]] && export DBG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005" && echo "Opened up rmi debugger port"
+java $DBG_OPTS -cp .:$libraries:${RODDY_BINARY} de.dkfz.roddy.Roddy $*
+IFS=$OFS

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.knowledge.examples;
 
 import de.dkfz.roddy.plugins.BasePlugin;
@@ -9,8 +15,8 @@ import de.dkfz.roddy.plugins.BasePlugin;
 
 public class TestPlugin extends BasePlugin {
 
-    public static final String CURRENT_VERSION_STRING = "1.0.35";
-    public static final String CURRENT_VERSION_BUILD_DATE = "Tue Feb 23 14:00:10 CET 2016";
+    public static final String CURRENT_VERSION_STRING = "1.0.36";
+    public static final String CURRENT_VERSION_BUILD_DATE = "Mon Jul 18 16:51:38 CEST 2016";
 
     @Override
     public String getVersionInfo() {

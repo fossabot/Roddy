@@ -1,9 +1,16 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.execution.jobs
 
 import de.dkfz.roddy.AvailableFeatureToggles;
 import de.dkfz.roddy.Constants
 import de.dkfz.roddy.Roddy
-import de.dkfz.roddy.config.FilenamePattern;
+import de.dkfz.roddy.config.FilenamePattern
+import de.dkfz.roddy.config.FilenamePatternHelper;
 import de.dkfz.roddy.execution.io.ExecutionService
 import de.dkfz.roddy.tools.LoggerWrapper;
 import de.dkfz.roddy.tools.RoddyIOHelperMethods;
@@ -26,7 +33,7 @@ public class Job {
 
     public static class FakeJob extends Job {
         public FakeJob() {
-            super(null, "Fakejob", null, null);
+            super(null, "Fakejob", null, [:]);
         }
 
         public FakeJob(ExecutionContext context) {
@@ -94,7 +101,7 @@ public class Job {
      */
     public final List<BaseFile> filesToVerify;
     /**
-     * Temporary value which defines the jobs state.
+     * Temporary value which defines the jobs jobState.
      */
     protected transient JobState currentJobState;
 
@@ -141,7 +148,7 @@ public class Job {
         this.parentFiles = parentFiles ?: new LinkedList<BaseFile>();
         if (parentFiles != null) {
             for (BaseFile bf : parentFiles) {
-                if(bf.isSourceFile() && bf.getCreatingJobsResult() == null) continue;
+                if (bf.isSourceFile() && bf.getCreatingJobsResult() == null) continue;
                 try {
                     JobDependencyID jobid = bf.getCreatingJobsResult()?.getJobID();
                     if (jobid?.isValidID()) {
@@ -213,14 +220,14 @@ public class Job {
             //TODO This is not the best way to do this, think of a better one which is more generic.
 
             List<Object> convertedParameters = new LinkedList<>();
-            for (Object o : ((Collection) _v)) {
+            for (Object o : _v as Collection) {
                 if (o instanceof BaseFile) {
                     if (((BaseFile) o).getPath() != null)
                         convertedParameters.add(((BaseFile) o).getAbsolutePath());
                 } else
                     convertedParameters.add(o.toString());
             }
-            this.parameters[k] = "parameterArray=(${RoddyIOHelperMethods.joinArray(convertedParameters.toArray(), " ")})".toString();
+            this.parameters[k] = "(${RoddyIOHelperMethods.joinArray(convertedParameters.toArray(), " ")})".toString();
 
 //        } else if(_v.getClass().isArray()) {
 //            newParameters.put(k, "parameterArray=(" + RoddyIOHelperMethods.joinArray((Object[]) _v, " ") + ")"); //TODO Put conversion to roddy helper methods?
@@ -235,21 +242,19 @@ public class Job {
     }
 
 
-    private File replaceParametersInFilePath(BaseFile bf, Map<String, Object> parameters) {
+    public static File replaceParametersInFilePath(BaseFile bf, Map<String, Object> parameters) {
         //TODO: It can occur that the regeneration of the filename is not valid!
 
         // Replace $_JOBPARAMETER items in path with proper values.
-        //TODO: Think how to best place this with parameters into the FilenamePattern class.
         File path = bf.getPath()
         if (path == null) {
             return null;
         }
 
         String absolutePath = path.getAbsolutePath()
-        if (absolutePath.contains(PLACEHOLDER_JOBPARAMETER)) {
-            FilenamePattern.Command command = FilenamePattern.extractCommand(PLACEHOLDER_JOBPARAMETER, absolutePath);
-            FilenamePattern.CommandAttribute name = command.attributes.get("name");
-//                    FilenamePattern.CommandAttribute defValue = command.attributes.get("default");
+        List<FilenamePatternHelper.Command> commands = FilenamePatternHelper.extractCommands(bf.getExecutionContext(), PLACEHOLDER_JOBPARAMETER, absolutePath);
+        for (FilenamePatternHelper.Command command : commands) {
+            FilenamePatternHelper.CommandAttribute name = command.attributes.get("name");
             if (name != null) {
                 String val = parameters[name.value];
                 if (val == null) {
@@ -457,13 +462,13 @@ public class Job {
 
         //More detailed if then because of enhanced debug / breakpoint possibilities
         if (isVerbosityHigh) {
-            if(parentJobIsDirty)
+            if (parentJobIsDirty)
                 dbgMessage << "\t* Job is set to rerun because a parent job is marked dirty" << sep;
             if (knownFilesCountMismatch)
                 dbgMessage << "\t* The number of existing files does not match with the number of files which should be created" << sep
-            if(fileUnverified)
+            if (fileUnverified)
                 dbgMessage << "\t* One or more files could not be verified" << sep;
-            if(parentFileIsDirty)
+            if (parentFileIsDirty)
                 dbgMessage << "\t* One or more of the jobs parent files could not be verified" << sep;
         }
         isDirty = true;
@@ -655,7 +660,6 @@ public class Job {
             return;
         JobState old = this.currentJobState;
         this.currentJobState = js;
-        fireJobStatusChangedEvent(old, js);
     }
 
     public JobState getJobState() {
@@ -686,45 +690,45 @@ public class Job {
         return lastCommand;
     }
 
-    private transient final Deque<JobStatusListener> listeners = new ConcurrentLinkedDeque<>();
-
-    public void addJobStatusListener(JobStatusListener listener, boolean replaceOfSameClass) {
-        //TODO Synchronize
-        if (replaceOfSameClass) {
-            Class c = listener.getClass();
-            Deque<JobStatusListener> listenersToKeep = new ConcurrentLinkedDeque<>();
-            for (JobStatusListener jsl : this.listeners) {
-                if (jsl.getClass() != c)
-                    listenersToKeep.add(jsl);
-            }
-            listeners.clear();
-            listeners.addAll(listenersToKeep);
-        }
-        addJobStatusListener(listener);
-    }
-
-    public void addJobStatusListener(JobStatusListener listener) {
-        synchronized (listeners) {
-            if (this.listeners.contains(listener)) return;
-            this.listeners.add(listener);
-        }
-    }
-
-    private void fireJobStatusChangedEvent(JobState old, JobState newState) {
-        //TODO Synchronize
-        if (old == newState) return;
-        for (JobStatusListener jsl : listeners)
-            jsl.jobStatusChanged(this, old, newState);
-    }
-
-    public void removeJobStatusListener(JobStatusListener listener) {
-        if (listener == null)
-            return;
-        synchronized (listeners) {
-            if (this.listeners.contains(listener))
-                this.listeners.remove(listener);
-        }
-    }
+//    private transient final Deque<JobStatusListener> listeners = new ConcurrentLinkedDeque<>();
+//
+//    public void addJobStatusListener(JobStatusListener listener, boolean replaceOfSameClass) {
+//        //TODO Synchronize
+//        if (replaceOfSameClass) {
+//            Class c = listener.getClass();
+//            Deque<JobStatusListener> listenersToKeep = new ConcurrentLinkedDeque<>();
+//            for (JobStatusListener jsl : this.listeners) {
+//                if (jsl.getClass() != c)
+//                    listenersToKeep.add(jsl);
+//            }
+//            listeners.clear();
+//            listeners.addAll(listenersToKeep);
+//        }
+//        addJobStatusListener(listener);
+//    }
+//
+//    public void addJobStatusListener(JobStatusListener listener) {
+//        synchronized (listeners) {
+//            if (this.listeners.contains(listener)) return;
+//            this.listeners.add(listener);
+//        }
+//    }
+//
+//    private void fireJobStatusChangedEvent(JobState old, JobState newState) {
+//        //TODO Synchronize
+//        if (old == newState) return;
+//        for (JobStatusListener jsl : listeners)
+//            jsl.jobStatusChanged(this, old, newState);
+//    }
+//
+//    public void removeJobStatusListener(JobStatusListener listener) {
+//        if (listener == null)
+//            return;
+//        synchronized (listeners) {
+//            if (this.listeners.contains(listener))
+//                this.listeners.remove(listener);
+//        }
+//    }
 
     public Map<String, String> getParameters() {
         return parameters;

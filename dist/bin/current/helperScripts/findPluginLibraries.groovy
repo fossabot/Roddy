@@ -1,7 +1,13 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 // This script is used to extract plugin jar files from the various plugin directories.
 // The plugin directories come from the roddy configuration
 // The dependencies are stored within the buildinfo.txt files for the specified plugin
-// The script needs two parameters: 
+// The script needs several parameters:
 // - The plugin line from the configuration file
 // - The roddy binary directory
 // - The working directory for the current plugin

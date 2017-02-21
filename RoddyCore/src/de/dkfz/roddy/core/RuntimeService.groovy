@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.core
 
 import de.dkfz.roddy.Constants
@@ -12,10 +18,12 @@ import de.dkfz.roddy.execution.jobs.*
 import de.dkfz.roddy.knowledge.files.BaseFile
 import de.dkfz.roddy.knowledge.files.LoadedFile
 import de.dkfz.roddy.tools.LoggerWrapper
+import de.dkfz.roddy.tools.RoddyIOHelperMethods
 import groovy.transform.CompileStatic
 import groovy.transform.TypeCheckingMode
 import groovy.util.slurpersupport.NodeChild
 import groovy.xml.MarkupBuilder
+import org.apache.commons.io.filefilter.WildcardFileFilter
 
 import static de.dkfz.roddy.StringConstants.EMPTY
 import static de.dkfz.roddy.StringConstants.SPLIT_COLON
@@ -38,9 +46,13 @@ public abstract class RuntimeService extends CacheProvider {
     public static final String FILENAME_REPEATABLEJOBCALLS = "repeatableJobCalls.sh"
     public static final String FILENAME_EXECUTEDJOBS_INFO = "executedJobs.txt"
     public static final String FILENAME_ANALYSES_MD5_OVERVIEW = "zippedAnalysesMD5.txt"
-    public static final String DIRECTORY_RODDY_COMMON_EXECUTION = ".roddyExecutionDirectory"
+    public static final String DIRECTORY_RODDY_COMMON_EXECUTION = ".roddyExecutionStore"
     public static final String DIRNAME_ANALYSIS_TOOLS = "analysisTools"
     public static final String RODDY_CENTRAL_EXECUTION_DIRECTORY = "RODDY_CENTRAL_EXECUTION_DIRECTORY"
+
+    public RuntimeService() {
+        super("RuntimeService");
+    }
 
     /**
      * Loads a list of input data set for the specified analysis.
@@ -60,14 +72,14 @@ public abstract class RuntimeService extends CacheProvider {
         return loadDataSetsFromDirectory(directory, analysis)
     }
 
-    public List<DataSet> loadCombinedListOfDataSets(Analysis analysis) {
+    public List<DataSet> loadCombinedListOfPossibleDataSets(Analysis analysis) {
 
         if(Roddy.isMetadataCLOptionSet()) {
 
             BaseMetadataTable table = MetadataTableFactory.getTable(analysis)
             List<String> _datasets = table.listDatasets();
             String pOut = analysis.getOutputBaseDirectory().getAbsolutePath() + File.separator;
-            return _datasets.collect { new DataSet(analysis, it, new File(pOut + it)) }
+            return _datasets.collect { new DataSet(analysis, it, new File(pOut + it), table); }
 
         } else {
 
@@ -115,9 +127,65 @@ public abstract class RuntimeService extends CacheProvider {
         return results;
     }
 
-    public RuntimeService() {
-        super("RuntimeService");
+    /**
+     * A small cache which prevents Roddy from querying the file system for datasets several times.
+     */
+    private Map<Analysis, List<DataSet>> _listOfPossibleDataSetsByAnalysis = [:]
+
+    /**
+     * Fetches information to the projects data sets and various analysis related additional information for those data sets.
+     * Retrieves the data sets for this analysis from it's project and appends the data for this analysis (if not already set).
+     * <p>
+     * getListOfPossibleDataSets without a parameter
+     *
+     * @return
+     */
+    public List<DataSet> getListOfPossibleDataSets(Analysis analysis, boolean avoidRecursion = false) {
+
+        if (_listOfPossibleDataSetsByAnalysis[analysis] == null)
+            _listOfPossibleDataSetsByAnalysis[analysis] = loadCombinedListOfPossibleDataSets(analysis);
+
+        if(!avoidRecursion) {
+            List<AnalysisProcessingInformation> previousExecs = readoutExecCacheFile(analysis);
+
+            for (DataSet ds : _listOfPossibleDataSetsByAnalysis[analysis]) {
+                for (AnalysisProcessingInformation api : previousExecs) {
+                    if (api.getDataSet() == ds) {
+                        ds.addProcessingInformation(api);
+                    }
+                }
+                analysis.getProject().updateDataSet(ds, analysis);
+            }
+        }
+
+        return _listOfPossibleDataSetsByAnalysis[analysis];
     }
+
+    public List<DataSet> loadDatasetsWithFilter(Analysis analysis, List<String> pidFilters, boolean suppressInfo = false) {
+        if (pidFilters == null || pidFilters.size() == 0 || pidFilters.size() == 1 && pidFilters.get(0).equals("[ALL]")) {
+            pidFilters = Arrays.asList("*");
+        }
+        List<DataSet> listOfDataSets = getListOfPossibleDataSets(analysis);
+        return selectDatasetsFromPattern(analysis, pidFilters, listOfDataSets, suppressInfo);
+    }
+
+    public List<DataSet> selectDatasetsFromPattern(Analysis analysis, List<String> pidFilters, List<DataSet> listOfDataSets, boolean suppressInfo) {
+
+        List<DataSet> selectedDatasets = new LinkedList<>();
+        WildcardFileFilter wff = new WildcardFileFilter(pidFilters);
+        for (DataSet ds : listOfDataSets) {
+            File inputFolder = ds.getInputFolderForAnalysis(analysis);
+            if (!wff.accept(inputFolder))
+                continue;
+            if (!suppressInfo) logger.info(String.format("Selected dataset %s for processing.", ds.getId()));
+            selectedDatasets.add(ds);
+        }
+
+        if (selectedDatasets.size() == 0)
+            logger.postAlwaysInfo("There were no available datasets for the provided pattern.");
+        return selectedDatasets;
+    }
+
 
     /**
      * The method tries to read back an execution context from a directory structure.
@@ -195,7 +263,7 @@ public abstract class RuntimeService extends CacheProvider {
             Map<String, Job> unknownJobs = new LinkedHashMap<>();
             Map<String, Job> possiblyRunningJobs = new LinkedHashMap<>();
             List<String> queryList = new LinkedList<>();
-            //For every job which is still unknown or possibly running get the actual state from the cluster
+            //For every job which is still unknown or possibly running get the actual jobState from the cluster
             for (Job job : jobsStartedInContext) {
                 if (job.getJobState().isUnknown() || job.getJobState() == JobState.UNSTARTED) {
                     unknownJobs.put(job.getJobID(), job);
@@ -411,7 +479,7 @@ public abstract class RuntimeService extends CacheProvider {
         String outPath = getOutputFolderForDataSetAndAnalysis(context.getDataSet(), context.getAnalysis()).absolutePath
         String sep = FileSystemAccessProvider.getInstance().getPathSeparator();
 
-        String dirPath = "${outPath}${sep}roddyExecutionStore${sep}${ConfigurationConstants.RODDY_EXEC_DIR_PREFIX}${context.getTimeStampString()}_${context.getExecutingUser()}_${context.getAnalysis().getName()}"
+        String dirPath = "${outPath}${sep}roddyExecutionStore${sep}${ConfigurationConstants.RODDY_EXEC_DIR_PREFIX}${context.getTimestampString()}_${context.getExecutingUser()}_${context.getAnalysis().getName()}"
         if (context.getExecutionContextLevel() == ExecutionContextLevel.CLEANUP)
             dirPath += "_cleanup"
         return new File(dirPath);
@@ -486,48 +554,21 @@ public abstract class RuntimeService extends CacheProvider {
         return new File(getExecutionDirFilePrefixString(context) + FILENAME_RUNTIME_INFO);
     }
 
-    public String extractDataSetIDFromPath(File p, Analysis analysis) {
-        //Try new version first, fallback to old version if necessary.
-//        if (!Roddy.getFeatureToggleValue(AvailableFeatureToggles.UseOldDataSetIDExtraction)) {
-//            def instance = FileSystemAccessManager.getInstance();
-//            //TODO Hack! This will only work on Linux systems using bash. Extract the PID from the realjobcalls file. PID is always a parameter.
-//            def realJobCalls = new File(p, "realJobCalls.txt")
-//            try {
-//                if (instance.checkFile(realJobCalls)) {
-//                    String line = instance.getLineOfFile(realJobCalls, 0); //Get the first line of a file.
-//                    int indexOfPID = line.indexOf("PID=");
-//                    String datasetID = line.substring(indexOfPID + 4).split(StringConstants.SPLIT_COMMA)[0].split(StringConstants.SPLIT_WHITESPACE)[0]
-//                    return datasetID;
-//                }
-//            } catch (Exception ex) {
-//                //Fallback...
-//            }
-//        }
-
-        getOutputFolderForAnalysis(analysis);
-
-        String realString = analysis.getConfiguration().getConfigurationValues().get(ConfigurationConstants.CFG_OUTPUT_ANALYSIS_BASE_DIRECTORY).toFile(analysis).getAbsolutePath();
-        String[] split = realString.split("/");
-        //TODO can be quite error prone! what if a user puts an additional / somewhere?
-        int index = -1;
-        for (int i = 0; i < split.length; i++) {
-            index++;
-            if (split[i].equals('${pid}')) {
-                break;
-            }
-        }
-        if (index == -1) {
-            return Constants.UNKNOWN;
-        }
-
-        split = p.getAbsolutePath().split("/");
-        return split[index];
-
+    /** Only the first matching ${dataSet} or ${pid} will be returned. ${dataSet} has precedence over ${pid}.
+     *  No checks are done that there is a unique solution.
+     * @param path
+     * @param analysis
+     * @return
+     */
+    public String extractDataSetIDFromPath(File path, Analysis analysis) {
+        String pattern = analysis.getConfiguration().getConfigurationValues().get(ConfigurationConstants.CFG_OUTPUT_ANALYSIS_BASE_DIRECTORY).toFile(analysis).getAbsolutePath()
+        RoddyIOHelperMethods.getPatternVariableFromPath(pattern, "dataSet", path.getAbsolutePath()).
+                orElse(RoddyIOHelperMethods.getPatternVariableFromPath(pattern, "pid", path.getAbsolutePath()).
+                        orElse(Constants.UNKNOWN))
     }
 
     /**
      * Looks in the projects output directory if the cache file exists. If it does not exist it is created using the find command.
-     * TODO Think if this is the right place to have this method! Should this be in the runtime service?
      * @param project
      */
     public List<AnalysisProcessingInformation> readoutExecCacheFile(Analysis analysis) {
@@ -542,7 +583,12 @@ public abstract class RuntimeService extends CacheProvider {
                 if (info.length < 2) return;
                 File path = new File(info[0]);
                 execDirectories << path;
-                String dataSetID = analysis.getRuntimeService().extractDataSetIDFromPath(path, analysis);
+                String dataSetID
+                try {
+                    dataSetID = analysis.getRuntimeService().extractDataSetIDFromPath(path, analysis);
+                } catch (RuntimeException e) {
+                    throw new RuntimeException(e.message + " If you moved the .roddyExecCache.txt, please delete it and restart Roddy.")
+                }
                 Analysis dataSetAnalysis = analysis.getProject().getAnalysis(info[1])
                 DataSet ds = analysis.getDataSet(dataSetID);
                 if (dataSetAnalysis == analysis) {
@@ -622,7 +668,94 @@ public abstract class RuntimeService extends CacheProvider {
 
     public abstract Map<String, Object> getDefaultJobParameters(ExecutionContext context, String TOOLID)
 
-    public abstract String createJobName(ExecutionContext executionContext, BaseFile file, String TOOLID, boolean reduceLevel)
+    public String createJobName(ExecutionContext executionContext, BaseFile file, String TOOLID, boolean reduceLevel) {
+        return JobManager.getInstance().createJobName(file, TOOLID, reduceLevel);
+    }
 
-    public abstract boolean isFileValid(BaseFile baseFile)
+    /**
+     * Checks if a folder is valid
+     *
+     * A folder is valid if:
+     * <ul>
+     *   <li>its parents are valid</li>
+     *   <li>it was not created recently (within this context)</li>
+     *   <li>it exists</li>
+     *   <li>it can be validated (i.e. by its size or files, but not with a lengthy operation!)</li>
+     * </ul>
+     */
+    public boolean isFileValid(BaseFile baseFile) {
+
+        //Parents valid?
+        boolean parentsValid = true;
+        for (BaseFile bf in baseFile.parentFiles) {
+            if (bf.isTemporaryFile()) continue; //We do not check the existence of parent files which are temporary.
+            if (bf.isSourceFile()) continue;
+            if (!bf.isFileValid()) {
+                return false;
+            }
+        }
+
+        boolean result = true;
+
+        //Source files should be marked as such and checked in a different way. They are assumed to be valid.
+        if (baseFile.isSourceFile())
+            return true;
+
+        //Temporary files are also considered as valid.
+        if (baseFile.isTemporaryFile())
+            return true;
+
+        try {
+            //Was freshly created?
+            if (baseFile.creatingJobsResult != null && baseFile.creatingJobsResult.wasExecuted) {
+                result = false;
+            }
+        } catch (Exception ex) {
+            result = false;
+        }
+
+        try {
+            //Does it exist and is it readable?
+            if (result && !baseFile.isFileReadable()) {
+                result = false;
+            }
+        } catch (Exception ex) {
+            result = false;
+        }
+
+        try {
+            //Can it be validated?
+            //TODO basefiles are always validated!
+            if (result && !baseFile.checkFileValidity()) {
+                result = false;
+            }
+        } catch (Exception ex) {
+            result = false;
+        }
+
+        // TODO? If the file is not valid then also temporary parent files should be invalidated! Or at least checked.
+        if (!result) {
+            // Something is missing here! Michael?
+        }
+
+        return result;
+    }
+
+
+    /**
+     * Releases the cache in this provider
+     */
+    @Override
+    public void releaseCache() {
+
+    }
+
+    @Override
+    public boolean initialize() {
+        return true;
+    }
+
+    @Override
+    public void destroy() {
+    }
 }

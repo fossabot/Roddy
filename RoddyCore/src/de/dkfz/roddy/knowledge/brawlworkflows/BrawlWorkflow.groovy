@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.knowledge.brawlworkflows
 
 import de.dkfz.roddy.StringConstants
@@ -11,7 +17,6 @@ import de.dkfz.roddy.knowledge.methods.GenericMethod
 import de.dkfz.roddy.plugins.LibrariesFactory
 import de.dkfz.roddy.tools.LoggerWrapper
 import de.dkfz.roddy.tools.RoddyConversionHelperMethods
-import examples.Exec
 
 import java.lang.reflect.Field
 import java.lang.reflect.Type

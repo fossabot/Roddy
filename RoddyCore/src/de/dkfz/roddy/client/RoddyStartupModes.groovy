@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.client;
 
 import de.dkfz.roddy.Constants;
@@ -44,6 +50,8 @@ public enum RoddyStartupModes {
 
     listdatasets(SCOPE_FULL, [useconfig]),
 
+    autoselect(SCOPE_REDUCED, [useconfig]),
+
     run(SCOPE_FULL, [test, useconfig, verbositylevel, debugOptions, waitforjobs, useiodir, disabletrackonlyuserjobs, trackonlystartedjobs, resubmitjobonerror, autosubmit, autocleanup, run, dontrun]),
 
     rerun(SCOPE_FULL, [test, run, dontrun, useconfig, verbositylevel, debugOptions, waitforjobs, useiodir, disabletrackonlyuserjobs, trackonlystartedjobs, resubmitjobonerror, autosubmit, autocleanup] as List<RoddyStartupOptions>),
@@ -61,6 +69,8 @@ public enum RoddyStartupModes {
     abort(SCOPE_FULL, [useconfig, verbositylevel]),
 
     ui(SCOPE_FULL, [useconfig, verbositylevel]),
+
+    rmi(SCOPE_FULL, [useconfig]),
 
     compile(SCOPE_CLI),
 

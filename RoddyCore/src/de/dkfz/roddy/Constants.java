@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy;
 
 /**
@@ -10,8 +16,8 @@ public class Constants {
     // Application constants
     /////////////////////////
 
-    public static final String APP_CURRENT_VERSION_STRING = "2.3.100";
-    public static final String APP_CURRENT_VERSION_BUILD_DATE = "Wed Jun 15 16:51:32 CEST 2016";
+    public static final String APP_CURRENT_VERSION_STRING = "2.3.134";
+    public static final String APP_CURRENT_VERSION_BUILD_DATE = "Tue Feb 14 11:10:50 CET 2017";
     public static final String APP_PROPERTY_COMMAND_FACTORY_CLASS = "jobManagerClass";
     public static final String APP_PROPERTY_FILESYSTEM_ACCESS_MANAGER_CLASS = "fileSystemAccessManagerClass";
     public static final String APP_PROPERTY_EXECUTION_SERVICE_CLASS = "executionServiceClass";

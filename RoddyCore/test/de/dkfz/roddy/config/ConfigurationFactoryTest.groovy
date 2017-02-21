@@ -1,13 +1,23 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.config
 
 import de.dkfz.roddy.knowledge.files.GenericFileGroup
+import de.dkfz.roddy.plugins.LibrariesFactory
+import de.dkfz.roddy.plugins.LibrariesFactoryTest
 import de.dkfz.roddy.tools.BufferValue
 import de.dkfz.roddy.tools.TimeUnit
 import de.dkfz.roddy.tools.Tuple3
 import groovy.transform.TypeCheckingMode
 import groovy.util.slurpersupport.NodeChild
 import org.junit.BeforeClass
-import org.junit.Test;
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder
 import static ResourceSetSize.*;
 
@@ -18,6 +28,9 @@ import java.lang.reflect.Method
  */
 @groovy.transform.CompileStatic
 public class ConfigurationFactoryTest {
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
 
     public static TemporaryFolder tempFolder = new TemporaryFolder();
 
@@ -31,6 +44,9 @@ public class ConfigurationFactoryTest {
 
     @BeforeClass
     public static void setupClass() {
+
+        LibrariesFactory.initializeFactory(true);
+        LibrariesFactory.getInstance().loadLibraries(LibrariesFactory.buildupPluginQueue(LibrariesFactoryTest.callLoadMapOfAvailablePlugins(), "DefaultPlugin").values() as List);
 
         // Create buggy directories first.
         tempFolder.create();
@@ -75,14 +91,14 @@ public class ConfigurationFactoryTest {
 
     @Test
     public void testLoadInvalidConfigurationDirectories() {
-        // Load context from invalid directories and see, if the step fails.
-        ConfigurationFactory.initialize([testFolder3, testFolder4])
-
-        testFolder3.setReadable(true);
+        testFolder3.setReadable(false);
         testFolder4.setReadable(true);
 
-        assert ConfigurationFactory.getInstance().getAvailableProjectConfigurations().size() == 3;
-        assert ConfigurationFactory.getInstance().getAvailableConfigurationsOfType(Configuration.ConfigurationType.OTHER).size() == 1;
+        thrown.expect(RuntimeException.class);
+        thrown.expectMessage("Cannot access (read and execute) configuration directory '${testFolder3}'")
+
+        // Load context from invalid directories and see, if the step fails.
+        ConfigurationFactory.initialize([testFolder3, testFolder4])
     }
 
     @Test
@@ -145,10 +161,38 @@ public class ConfigurationFactoryTest {
         return xml;
     }
 
+    private NodeChild getToolEntryWithInlineScript() {
+        NodeChild xml = (NodeChild) new XmlSlurper().parseText(
+                """
+                    <tool name='samtoolsIndex' value='samtoolsIndexBamfile.sh' basepath='qcPipeline'>
+                        <resourcesets>
+                            <rset size="l" memory="1" cores="1" nodes="1" walltime="5"/>
+                        </resourcesets>
+                        <input type="file" typeof="de.dkfz.roddy.knowledge.files.GenericFileGroup" scriptparameter='FILENAME'/>
+                        <output type="file" typeof="de.dkfz.roddy.knowledge.files.GenericFileGroup"/>
+                        <script value='testscript.sh'>
+                        <![CDATA[
+                          echo 'test'
+                          ]]>
+                        </script>
+                    </tool>
+                """
+        );
+        return xml
+    }
+
     @groovy.transform.CompileStatic(TypeCheckingMode.SKIP)
     private Collection<NodeChild> getNodeChildsOfValidResourceEntries() {
         def resourceSetNodeChild = getValidToolResourceSetNodeChild()
         return resourceSetNodeChild.rset as Collection<NodeChild>;
+    }
+
+    @Test
+    public void testReadInlineScript() {
+        def toolEntry = ConfigurationFactory.getInstance().readProcessingTool(getToolEntryWithInlineScript(),null)
+        assert toolEntry.hasInlineScript()
+        assert toolEntry.getInlineScript().equals("echo 'test'")
+        assert toolEntry.getInlineScriptName().equals("testscript.sh")
     }
 
     @Test
@@ -192,6 +236,7 @@ public class ConfigurationFactoryTest {
 
     // @Michael: Should the two following derived from pattern map to the same pattern ID if the same class attribute value is used?
     private static final String STR_VALID_DERIVEDFROM_PATTERN = "<filename class='TestFileWithParent' derivedFrom='TestParentFile' pattern='/tmp/onderivedFile'/>"
+    private static final String STR_VALID_DERIVEDFROM_PATTERN_WITH_INLINESCRIPT = "<filename class='TestFileWithParent' derivedFrom='TestParentFile' pattern='/tmp/onderivedFile'/>"
     private static final String STR_VALID_DERIVEDFROM_PATTERN_WITH_ARR = "<filename class='TestFileWithParentArr' derivedFrom='TestParentFile[2]' pattern='/tmp/onderivedFile'/>"
     private static final String STR_VALID_ONMETHOD_PATTERN_FQN = "<filename class='TestFileOnMethod' onMethod='de.dkfz.roddy.knowledge.files.BaseFile.getFilename' pattern='/tmp/onMethod'/>"
     private static final String STR_VALID_ONMETHOD_PATTERN_WITH_CLASSNAME = "<filename class='TestFileOnMethod' onMethod='BaseFile.getFilename' pattern='/tmp/onMethodwithClassName'/>"

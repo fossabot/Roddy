@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.config;
 
 import de.dkfz.roddy.knowledge.files.BaseFile;
@@ -39,5 +45,9 @@ public class OnScriptParameterFilenamePattern extends FilenamePattern {
 
     public String getCalledParameterId() {
         return calledParameterId;
+    }
+
+    public String getToolName(){
+        return toolName;
     }
 }

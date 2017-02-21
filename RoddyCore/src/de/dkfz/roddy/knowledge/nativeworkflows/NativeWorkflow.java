@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2016 eilslabs.
+ *
+ * Distributed under the MIT License (license terms are at https://www.github.com/eilslabs/Roddy/LICENSE.txt).
+ */
+
 package de.dkfz.roddy.knowledge.nativeworkflows;
 
 import de.dkfz.roddy.config.AnalysisConfiguration;
@@ -65,7 +71,7 @@ public class NativeWorkflow extends Workflow {
 
         // In normal cases commands are executed by the default factory. In this case we want the command to be executed directly.
         String toolID = aCfg.getNativeToolID();
-        Job wrapperJob = new Job(context, context.getTimeStampString() + "_nativeJobWrapper:" + toolID, toolID, null);
+        Job wrapperJob = new Job(context, context.getTimestampString() + "_nativeJobWrapper:" + toolID, toolID, null);
 
         DirectSynchronousExecutedJobManager dcfac = new DirectSynchronousExecutedJobManager();
         DirectCommand wrapperJobCommand = dcfac.createCommand(wrapperJob, aCfg.getProcessingToolPath(context, toolID), new LinkedList<>());
